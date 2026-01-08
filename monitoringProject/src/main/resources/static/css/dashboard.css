@@ -1,0 +1,283 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #0a0e27;
+    color: #fff;
+    overflow-x: hidden;
+}
+
+.dashboard {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* 헤더 */
+.header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 20px 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.header h1 {
+    font-size: 1.8em;
+}
+
+.status-badge {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: rgba(255,255,255,0.2);
+    padding: 10px 20px;
+    border-radius: 20px;
+}
+
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #888;
+}
+
+.status-dot.connected {
+    background: #4caf50;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.2); }
+}
+
+.time-display {
+    font-size: 0.9em;
+    opacity: 0.9;
+}
+
+/* 메인 콘텐츠 */
+.main-content {
+    flex: 1;
+    padding: 30px;
+    overflow-y: auto;
+    background: #0f1329;
+}
+
+.pipeline-section {
+    background: #1a1f3a;
+    border-radius: 15px;
+    padding: 25px;
+    margin-bottom: 25px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    animation: slideIn 0.5s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.section-title {
+    font-size: 1.3em;
+    margin-bottom: 20px;
+    color: #667eea;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 이벤트 컨테이너 */
+.event-container {
+    background: #252b4a;
+    padding: 20px;
+    border-radius: 10px;
+    min-height: 100px;
+}
+
+.no-data {
+    color: #888;
+    text-align: center;
+    padding: 20px;
+}
+
+.event-item {
+    background: #2d3555;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    border-left: 4px solid #667eea;
+}
+
+.event-time {
+    color: #667eea;
+    font-size: 0.9em;
+    margin-bottom: 5px;
+}
+
+.event-message {
+    color: #ddd;
+}
+
+/* 컨테이너 그리드 */
+.container-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.container-card {
+    background: #252b4a;
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px solid #333;
+    transition: all 0.3s ease;
+}
+
+.container-card:hover {
+    border-color: #667eea;
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+}
+
+.container-card.running {
+    border-color: #4caf50;
+}
+
+.container-card.starting {
+    border-color: #ff9800;
+}
+
+.container-card.stopped {
+    border-color: #f44336;
+}
+
+.container-icon {
+    font-size: 2.5em;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.container-name {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.container-status {
+    text-align: center;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 0.9em;
+    margin-bottom: 10px;
+}
+
+.container-status.running {
+    background: #4caf50;
+}
+
+.container-status.starting {
+    background: #ff9800;
+}
+
+.container-status.stopped {
+    background: #f44336;
+}
+
+.container-info {
+    font-size: 0.85em;
+    color: #aaa;
+    margin-top: 10px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 6px;
+    background: #1a1f3a;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    transition: width 0.5s ease;
+}
+
+/* 로그 뷰어 */
+.log-viewer {
+    background: #0a0e1f;
+    border-radius: 10px;
+    padding: 20px;
+    height: 400px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    border: 1px solid #252b4a;
+}
+
+.log-line {
+    padding: 5px 0;
+    border-bottom: 1px solid #1a1f3a;
+    color: #ddd;
+}
+
+.log-line.info {
+    color: #2196f3;
+}
+
+.log-line.success {
+    color: #4caf50;
+}
+
+.log-line.error {
+    color: #f44336;
+}
+
+.log-line.warn {
+    color: #ff9800;
+}
+
+/* 스크롤바 */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1a1f3a;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #667eea;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #764ba2;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+    .header {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .container-grid {
+        grid-template-columns: 1fr;
+    }
+}

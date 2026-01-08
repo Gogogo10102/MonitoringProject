@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CI/CD 모니터링 대시보드</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+<div class="dashboard">
+    <!-- 헤더 -->
+    <div class="header">
+        <h1>🚀 CI/CD 통합 모니터링 대시보드</h1>
+        <div class="status-badge">
+            <div class="status-dot" id="connectionStatus"></div>
+            <span id="connectionText">연결 중...</span>
+            <span class="time-display" id="currentTime"></span>
+        </div>
+    </div>
+
+    <!-- 메인 콘텐츠 -->
+    <div class="main-content">
+        <!-- GitHub 이벤트 -->
+        <div class="pipeline-section">
+            <div class="section-title">
+                📊 GitHub 이벤트
+            </div>
+            <div id="githubEvents" class="event-container">
+                <p class="no-data">이벤트 대기 중...</p>
+            </div>
+        </div>
+
+        <!-- 컨테이너 상태 -->
+        <div class="pipeline-section">
+            <div class="section-title">
+                🐳 컨테이너 상태
+            </div>
+            <div class="container-grid" id="containerGrid">
+                <!-- 동적으로 생성됨 -->
+            </div>
+        </div>
+
+        <!-- 실시간 로그 -->
+        <div class="pipeline-section">
+            <div class="section-title">
+                📝 실시간 이벤트 로그
+            </div>
+            <div class="log-viewer" id="logViewer">
+                <div class="log-line">시스템 준비 완료. 실시간 모니터링 시작...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/js/dashboard.js"></script>
+</body>
+</html>
