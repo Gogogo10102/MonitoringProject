@@ -66,6 +66,7 @@ jobs:
         with:
           name: monitoring-jar
           path: build/libs/monitoring-1.0.0.jar
+          retention-days: 1  # artifact 보관 기간 설정
 
   Deploy:
     needs: [Check_Path, Build]
@@ -84,7 +85,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: monitoring-jar
-          path: build/libs/
+          path: ./  # 현재 디렉토리에 다운로드
+
+      - name: Verify JAR file
+        run: |
+          ls -la
+          if [ ! -f "monitoring-1.0.0.jar" ]; then
+            echo "JAR file not found!"
+            exit 1
+          fi
 
       - name: Deploy JAR to EC2
         uses: appleboy/scp-action@master
@@ -93,9 +102,8 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_PRIVATE_KEY }}
           port: ${{ secrets.REMOTE_SSH_PORT }}
-          source: "build/libs/monitoring-1.0.0.jar"
-          target: "/home/ubuntu/MonitoringProject/"
-          strip_components: 2
+          source: "monitoring-1.0.0.jar"
+          target: "/home/ubuntu/MonitoringProject/build/libs/"
 
       - name: Deploy to EC2 with Docker
         uses: appleboy/ssh-action@v1.0.3
@@ -128,8 +136,11 @@ jobs:
             EOF
             fi
             
-            # build/libs 디렉토리 확인
-            mkdir -p build/libs
+            # JAR 파일 확인
+            if [ ! -f "build/libs/monitoring-1.0.0.jar" ]; then
+              echo "ERROR: JAR file not found!"
+              exit 1
+            fi
             
             # Docker 컨테이너 재시작
             cd /home/ubuntu/docker-project
