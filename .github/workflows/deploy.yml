@@ -41,35 +41,8 @@ jobs:
             echo "should_deploy=false" >> $GITHUB_OUTPUT
           fi
 
-  Build:
-    needs: Check_Path
-    if: needs.Check_Path.outputs.should_deploy == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Build with Gradle
-        run: ./gradlew clean build -x test
-
-      - name: Upload JAR artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: monitoring-jar
-          path: build/libs/monitoring-1.0.0.jar
-          retention-days: 1  # artifact 보관 기간 설정
-
   Deploy:
-    needs: [Check_Path, Build]
+    needs: Check_Path
     if: |
       needs.Check_Path.outputs.should_deploy == 'true' && 
       (github.ref == 'refs/heads/main' || 
@@ -80,30 +53,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Download JAR artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: monitoring-jar
-          path: ./  # 현재 디렉토리에 다운로드
-
-      - name: Verify JAR file
-        run: |
-          ls -la
-          if [ ! -f "monitoring-1.0.0.jar" ]; then
-            echo "JAR file not found!"
-            exit 1
-          fi
-
-      - name: Deploy JAR to EC2
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_PRIVATE_KEY }}
-          port: ${{ secrets.REMOTE_SSH_PORT }}
-          source: "monitoring-1.0.0.jar"
-          target: "/home/ubuntu/MonitoringProject/build/libs/"
 
       - name: Deploy to EC2 with Docker
         uses: appleboy/ssh-action@v1.0.3
@@ -119,9 +68,23 @@ jobs:
             # 프로젝트 디렉토리로 이동
             cd /home/ubuntu/MonitoringProject
             
+            # 코드 업데이트 (EC2에서 직접 git pull)
+            git reset --hard
+            git pull origin main
+            
             # application.yml 생성
             mkdir -p src/main/resources
             echo "$APPLICATION_YML" > src/main/resources/application.yml
+            
+            # Gradle 빌드 실행 (EC2에서 직접 빌드)
+            chmod +x gradlew
+            ./gradlew clean build -x test
+            
+            # 빌드 결과 확인
+            if [ ! -f "build/libs/monitoring-1.0.0.jar" ]; then
+              echo "ERROR: JAR file not found after build!"
+              exit 1
+            fi
             
             # Dockerfile 확인 (없으면 생성)
             if [ ! -f Dockerfile ]; then
@@ -134,12 +97,6 @@ jobs:
             ENV SPRING_PROFILES_ACTIVE=prod
             ENTRYPOINT ["java", "-jar", "app.jar"]
             EOF
-            fi
-            
-            # JAR 파일 확인
-            if [ ! -f "build/libs/monitoring-1.0.0.jar" ]; then
-              echo "ERROR: JAR file not found!"
-              exit 1
             fi
             
             # Docker 컨테이너 재시작
@@ -158,6 +115,7 @@ jobs:
             # 정리
             docker container prune -f
             docker image prune -f --filter "dangling=true"
+            docker network prune -f
             
             # 로그 확인
             echo "=== Deployment completed ==="
