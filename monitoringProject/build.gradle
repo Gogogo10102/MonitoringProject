@@ -1,0 +1,44 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.0'
+    id 'io.spring.dependency-management' version '1.1.4'
+}
+
+group = 'com.monitoring'
+version = '1.0.0'
+
+
+java {
+    sourceCompatibility = '17'
+    targetCompatibility = '17'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+
+    // Docker Java API
+    implementation 'com.github.docker-java:docker-java:3.3.4'
+    implementation 'com.github.docker-java:docker-java-transport-httpclient5:3.3.4'
+
+    // GitHub API
+    implementation 'org.kohsuke:github-api:1.318'
+
+    // JSON 처리
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
