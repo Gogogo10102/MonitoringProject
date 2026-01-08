@@ -81,7 +81,7 @@ jobs:
             ./gradlew clean build -x test
             
             # 빌드 결과 확인
-            if [ ! -f "build/libs/Monitoring-1.0.0.jar" ]; then
+            if [ ! -f "build/libs/MonitoringProject-1.0.0.jar" ]; then
               echo "ERROR: JAR file not found after build!"
               exit 1
             fi
@@ -92,7 +92,7 @@ jobs:
               cat > Dockerfile << 'EOF'
             FROM eclipse-temurin:17-jre-alpine
             WORKDIR /app
-            COPY build/libs/Monitoring-1.0.0.jar app.jar
+            COPY build/libs/MonitoringProject-1.0.0.jar app.jar
             EXPOSE 8081
             ENV SPRING_PROFILES_ACTIVE=prod
             ENTRYPOINT ["java", "-jar", "app.jar"]
