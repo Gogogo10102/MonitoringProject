@@ -23,6 +23,7 @@ public class DockerClientConfig {
     public DockerClient dockerClient() {
         log.info("Initializing Docker client with host: {}", dockerHost);
 
+
         com.github.dockerjava.core.DockerClientConfig clientConfig =
                 DefaultDockerClientConfig.createDefaultConfigBuilder()
                         .withDockerHost(dockerHost)
