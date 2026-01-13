@@ -6,10 +6,9 @@ import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.Statistics;
 import com.monitoring.config.DockerProperties;
 import com.monitoring.model.ContainerStatus;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -28,10 +27,6 @@ public class ContainerStatusService {
     private final WebSocketService webSocketService;
     private final DockerProperties dockerProperties;
 
-    @Value("${docker.target-containers}")
-    private List<String> targetContainers;
-
-    // 모든 컨테이너 상태를 메모리에 저장
     private final Map<String, ContainerStatus> containerStatusMap = new ConcurrentHashMap<>();
 
     public ContainerStatusService(
@@ -45,33 +40,80 @@ public class ContainerStatusService {
 
     @PostConstruct
     public void initializeContainerStatus() {
-        log.info("Initializing container status");
+        log.info("=================================================");
+        log.info("Initializing Container Status Service");
+        log.info("Target Containers: {}", dockerProperties.getTargetContainers());
+        log.info("=================================================");
 
         try {
-            // Docker 연결 테스트
             dockerClient.pingCmd().exec();
-            log.info("Docker connection successful");
+            log.info("✅ Docker connection successful");
 
-            // 컨테이너 조회
             List<Container> containers = dockerClient.listContainersCmd()
                     .withShowAll(true)
                     .exec();
 
+            log.info("Found {} total containers", containers.size());
+
             for (Container container : containers) {
                 String name = extractContainerName(container.getNames()[0]);
+                log.debug("  - Found container: {}", name);
 
                 if (dockerProperties.getTargetContainers().contains(name)) {
                     updateContainerInfo(name);
-                    log.info("Initialized status for container: {}", name);
+                    log.info("✅ Initialized monitoring for: {}", name);
                 }
             }
+
+            if (containerStatusMap.isEmpty()) {
+                log.warn("⚠️  No target containers found!");
+                log.warn("    Expected: {}", dockerProperties.getTargetContainers());
+                log.warn("    Available containers:");
+                for (Container container : containers) {
+                    log.warn("      - {}", extractContainerName(container.getNames()[0]));
+                }
+            }
+
         } catch (Exception e) {
             log.warn("Docker not available (local development mode): {}", e.getMessage());
-            // 로컬 개발 시 에러 무시
         }
     }
 
+    /**
+     * 주기적으로 실행 중인 컨테이너의 상태를 업데이트 (5초마다)
+     */
+    @Scheduled(fixedDelay = 5000, initialDelay = 5000)
+    public void updateAllContainerStats() {
+        containerStatusMap.forEach((name, status) -> {
+            // starting 상태가 5초 이상 지속되면 running으로 전환
+            if ("starting".equals(status.getPhase())) {
+                long elapsed = System.currentTimeMillis() - status.getLastUpdate();
+                if (elapsed > 3000) { // 3초 후 running으로
+                    status.setPhase("running");
+                    status.setProgress(100);
+                    status.setStatus("running");
+                    status.setLastUpdate(System.currentTimeMillis());
+
+                    webSocketService.broadcast("container_status_update", status);
+                    log.info("✅ Container {} is now running", name);
+                }
+            }
+
+            // 실행 중인 컨테이너만 stats 업데이트
+            if ("running".equals(status.getPhase())) {
+                updateContainerInfo(name);
+                // ✅ 업데이트 후 WebSocket으로 전송!
+                webSocketService.broadcast("container_status_update", status);
+            }
+        });
+    }
+
     public void updateStatus(String containerName, String eventType) {
+        if (eventType == null) {
+            log.warn("⚠️  Received null eventType for container: {}", containerName);
+            return;
+        }
+
         ContainerStatus status = containerStatusMap.getOrDefault(
                 containerName,
                 ContainerStatus.builder()
@@ -79,7 +121,6 @@ public class ContainerStatusService {
                         .build()
         );
 
-        // 이벤트 타입에 따라 phase와 progress 결정
         switch (eventType) {
             case "create":
                 status.setPhase("creating");
@@ -90,31 +131,43 @@ public class ContainerStatusService {
                 status.setPhase("starting");
                 status.setProgress(50);
                 status.setStatus("starting");
+                // start 후 즉시 컨테이너 정보 조회
+                updateContainerInfo(containerName);
                 break;
             case "health_status: healthy":
-                status.setPhase("running");
-                status.setProgress(100);
-                status.setStatus("running");
+            case "exec_start":
+            case "exec_create":
+                // 이런 이벤트들은 컨테이너가 이미 실행 중이라는 신호
+                if (!"running".equals(status.getPhase())) {
+                    status.setPhase("running");
+                    status.setProgress(100);
+                    status.setStatus("running");
+                    log.info("✅ Container {} confirmed running", containerName);
+                }
                 break;
             case "stop":
+            case "pause":
                 status.setPhase("stopping");
                 status.setProgress(50);
                 status.setStatus("stopping");
                 break;
             case "die":
+            case "kill":
                 status.setPhase("stopped");
                 status.setProgress(0);
                 status.setStatus("stopped");
+                status.setCpu("N/A");
+                status.setMemory("N/A");
+                status.setUptime("N/A");
                 break;
             case "destroy":
+            case "remove":
                 status.setPhase("removed");
                 status.setProgress(0);
                 status.setStatus("removed");
-                break;
-            case "kill":
-                status.setPhase("killed");
-                status.setProgress(0);
-                status.setStatus("killed");
+                status.setCpu("N/A");
+                status.setMemory("N/A");
+                status.setUptime("N/A");
                 break;
             default:
                 status.setStatus(eventType);
@@ -123,20 +176,13 @@ public class ContainerStatusService {
         status.setLastUpdate(System.currentTimeMillis());
         containerStatusMap.put(containerName, status);
 
-        // 상세 정보 업데이트 (CPU, Memory 등)
-        if ("start".equals(eventType) || eventType.contains("health_status")) {
-            updateContainerInfo(containerName);
-        }
-
-        // WebSocket으로 브로드캐스트
         webSocketService.broadcast("container_status_update", status);
 
-        log.debug("Updated status for {}: {} - {}", containerName, eventType, status.getPhase());
+        log.debug("📊 Updated status for {}: {} - {}", containerName, eventType, status.getPhase());
     }
 
     private void updateContainerInfo(String containerName) {
         try {
-            // 컨테이너 찾기
             List<Container> containers = dockerClient.listContainersCmd()
                     .withShowAll(true)
                     .withNameFilter(List.of(containerName))
@@ -148,23 +194,37 @@ public class ContainerStatusService {
             }
 
             Container container = containers.get(0);
+            String containerId = container.getId();
 
-            // 상세 정보 조회
             InspectContainerResponse info = dockerClient
-                    .inspectContainerCmd(container.getId())
+                    .inspectContainerCmd(containerId)
                     .exec();
 
             ContainerStatus status = containerStatusMap.get(containerName);
-            if (status != null) {
+            if (status == null) {
+                return;
+            }
+
+            // 실행 중인 컨테이너만 stats 조회
+            if (info.getState().getRunning()) {
                 // Uptime 계산
                 if (info.getState().getStartedAt() != null) {
                     status.setUptime(calculateUptime(info.getState().getStartedAt()));
                 }
 
-                // Stats는 실행 중일 때만 조회 가능
-                if (info.getState().getRunning()) {
-                    updateContainerStats(containerName, container.getId());
+                // Stats 조회 (비동기)
+                try {
+                    updateContainerStats(containerName, containerId, status);
+                } catch (Exception e) {
+                    log.debug("Could not get stats for {}: {}", containerName, e.getMessage());
+                    status.setCpu("-");
+                    status.setMemory("-");
                 }
+            } else {
+                // 중지된 컨테이너
+                status.setCpu("N/A");
+                status.setMemory("N/A");
+                status.setUptime("N/A");
             }
 
         } catch (Exception e) {
@@ -172,22 +232,77 @@ public class ContainerStatusService {
         }
     }
 
-    private void updateContainerStats(String containerName, String containerId) {
+    private void updateContainerStats(String containerName, String containerId, ContainerStatus status) {
         try {
-            // 비동기로 Stats 조회 (블로킹 방지)
-            // 실제로는 별도 스레드에서 주기적으로 조회하는 것이 좋음
-            // 여기서는 간단히 동기 방식으로 구현
+            // Stats를 한 번만 가져오기 (stream=false)
+            dockerClient.statsCmd(containerId)
+                    .withNoStream(true)
+                    .exec(new com.github.dockerjava.api.async.ResultCallback.Adapter<Statistics>() {
+                        @Override
+                        public void onNext(Statistics stats) {
+                            if (stats != null && stats.getCpuStats() != null && stats.getMemoryStats() != null) {
+                                // CPU 사용률 계산
+                                String cpuUsage = calculateCpuUsage(stats);
 
-            ContainerStatus status = containerStatusMap.get(containerName);
-            if (status != null) {
-                // 임시로 고정값 설정 (실제로는 Stats API 사용)
-                status.setCpu("N/A");
-                status.setMemory("N/A");
-            }
+                                // Memory 사용량 계산
+                                String memoryUsage = calculateMemoryUsage(stats);
+
+                                status.setCpu(cpuUsage);
+                                status.setMemory(memoryUsage);
+
+                                log.debug("📊 Stats for {}: CPU={}, Memory={}",
+                                        containerName, cpuUsage, memoryUsage);
+                            }
+                        }
+                    })
+                    .awaitCompletion();
 
         } catch (Exception e) {
-            log.error("Failed to update container stats: {}", containerName, e);
+            log.debug("Stats not available for {}", containerName);
+            status.setCpu("-");
+            status.setMemory("-");
         }
+    }
+
+    private String calculateCpuUsage(Statistics stats) {
+        try {
+            Long cpuDelta = stats.getCpuStats().getCpuUsage().getTotalUsage() -
+                    stats.getPreCpuStats().getCpuUsage().getTotalUsage();
+            Long systemDelta = stats.getCpuStats().getSystemCpuUsage() -
+                    stats.getPreCpuStats().getSystemCpuUsage();
+
+            if (systemDelta > 0 && cpuDelta >= 0) {
+                Long onlineCpus = stats.getCpuStats().getOnlineCpus();
+                int cpuCount = (onlineCpus != null && onlineCpus > 0) ?
+                        onlineCpus.intValue() :
+                        (stats.getCpuStats().getCpuUsage().getPercpuUsage() != null ?
+                                stats.getCpuStats().getCpuUsage().getPercpuUsage().size() : 1);
+
+                double cpuPercent = (cpuDelta.doubleValue() / systemDelta.doubleValue()) * cpuCount * 100.0;
+                return String.format("%.1f%%", cpuPercent);
+            }
+        } catch (Exception e) {
+            log.debug("CPU calculation failed: {}", e.getMessage());
+        }
+        return "-";
+    }
+
+    private String calculateMemoryUsage(Statistics stats) {
+        try {
+            Long usage = stats.getMemoryStats().getUsage();
+            Long limit = stats.getMemoryStats().getLimit();
+
+            if (usage != null && limit != null && limit > 0) {
+                double usageMB = usage / 1024.0 / 1024.0;
+                double limitMB = limit / 1024.0 / 1024.0;
+                double percent = (usage.doubleValue() / limit.doubleValue()) * 100.0;
+
+                return String.format("%.0f/%.0fMB (%.0f%%)", usageMB, limitMB, percent);
+            }
+        } catch (Exception e) {
+            log.debug("Memory calculation failed: {}", e.getMessage());
+        }
+        return "-";
     }
 
     private String calculateUptime(String startedAt) {
@@ -201,8 +316,10 @@ public class ContainerStatusService {
 
             if (hours > 0) {
                 return String.format("%dh %dm", hours, minutes);
-            } else {
+            } else if (minutes > 0) {
                 return String.format("%dm", minutes);
+            } else {
+                return String.format("%ds", duration.toSecondsPart());
             }
         } catch (Exception e) {
             return "N/A";
@@ -210,7 +327,6 @@ public class ContainerStatusService {
     }
 
     private String extractContainerName(String fullName) {
-        // Docker는 컨테이너 이름을 "/name" 형식으로 반환
         return fullName.startsWith("/") ? fullName.substring(1) : fullName;
     }
 

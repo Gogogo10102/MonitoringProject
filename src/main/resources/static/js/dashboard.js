@@ -1,6 +1,7 @@
 // WebSocket 연결
 let ws = null;
 let reconnectInterval = null;
+let logEventSource = null;
 
 // 컨테이너 아이콘 매핑
 const containerIcons = {
@@ -8,7 +9,11 @@ const containerIcons = {
     'mysql-db': '🗄️',
     'nginx': '🌐',
     'prometheus': '📊',
-    'grafana': '📈'
+    'grafana': '📈',
+    'test-nginx-1': '🧪',
+    'test-nginx-2': '🧪',
+    'test-nginx-3': '🧪',
+    'demo-app': '🚀'
 };
 
 // 초기화
@@ -17,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTime();
     setInterval(updateTime, 1000);
     loadInitialData();
+    setupModalClose();
 });
 
 // 현재 시간 업데이트
@@ -68,7 +74,6 @@ function connectWebSocket() {
         document.getElementById('connectionText').textContent = '연결 끊김';
         addLog('warn', 'WebSocket 연결 끊김. 재연결 시도 중...');
 
-        // 5초마다 재연결 시도
         if (!reconnectInterval) {
             reconnectInterval = setInterval(() => {
                 connectWebSocket();
@@ -142,6 +147,9 @@ function createContainerCard(name, status) {
     card.id = `container-${name}`;
     card.className = `container-card ${status.phase || 'unknown'}`;
 
+    // ✅ 클릭 이벤트 추가
+    card.onclick = () => openLogModal(name);
+
     const icon = containerIcons[name] || '📦';
     const phase = status.phase || 'unknown';
     const progress = status.progress || 0;
@@ -198,7 +206,6 @@ function handleGithubPush(data) {
         </div>
     `;
 
-    // 기존 no-data 제거
     const noData = container.querySelector('.no-data');
     if (noData) {
         noData.remove();
@@ -234,8 +241,77 @@ function addLog(level, message) {
     logViewer.appendChild(logLine);
     logViewer.scrollTop = logViewer.scrollHeight;
 
-    // 로그가 너무 많아지면 오래된 것 삭제 (최대 100개)
     if (logViewer.children.length > 100) {
         logViewer.removeChild(logViewer.firstChild);
     }
+}
+
+// ============================================
+// 로그 모달 기능
+// ============================================
+
+function openLogModal(containerName) {
+    const modal = document.getElementById('logModal');
+    const title = document.getElementById('modalTitle');
+    const logContainer = document.getElementById('logContainer');
+
+    // 모달 표시
+    modal.classList.add('active');
+    title.textContent = `${containerIcons[containerName] || '📦'} ${containerName} - 실시간 로그`;
+    logContainer.innerHTML = '<div class="log-loading">로그 로딩 중...</div>';
+
+    // 기존 EventSource 종료
+    if (logEventSource) {
+        logEventSource.close();
+    }
+
+    // SSE로 실시간 로그 스트리밍
+    logEventSource = new EventSource(`/api/logs/${containerName}/stream`);
+
+    logContainer.innerHTML = '<pre></pre>';
+    const logPre = logContainer.querySelector('pre');
+
+    logEventSource.addEventListener('log', (event) => {
+        logPre.textContent += event.data;
+        // 자동 스크롤
+        logContainer.scrollTop = logContainer.scrollHeight;
+    });
+
+    logEventSource.onerror = (error) => {
+        console.error('Log stream error:', error);
+        logPre.textContent += '\n\n❌ 로그 스트리밍 오류 발생\n';
+        logEventSource.close();
+    };
+}
+
+function closeLogModal() {
+    const modal = document.getElementById('logModal');
+    modal.classList.remove('active');
+
+    // EventSource 종료
+    if (logEventSource) {
+        logEventSource.close();
+        logEventSource = null;
+    }
+}
+
+function setupModalClose() {
+    const modal = document.getElementById('logModal');
+
+    // X 버튼 클릭
+    document.getElementById('modalCloseBtn').onclick = closeLogModal;
+
+    // 모달 배경 클릭
+    modal.onclick = (e) => {
+        if (e.target === modal) {
+            closeLogModal();
+        }
+    };
+
+    // ESC 키
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+            closeLogModal();
+        }
+    });
 }

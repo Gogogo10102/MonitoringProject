@@ -33,7 +33,7 @@
         <!-- 컨테이너 상태 -->
         <div class="pipeline-section">
             <div class="section-title">
-                🐳 컨테이너 상태
+                🐳 컨테이너 상태 (클릭 시 로그 확인)
             </div>
             <div class="container-grid" id="containerGrid">
                 <!-- 동적으로 생성됨 -->
@@ -47,6 +47,23 @@
             </div>
             <div class="log-viewer" id="logViewer">
                 <div class="log-line">시스템 준비 완료. 실시간 모니터링 시작...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 로그 모달 -->
+<div id="logModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <div class="modal-title" id="modalTitle">
+                📋 컨테이너 로그
+            </div>
+            <button class="modal-close" id="modalCloseBtn">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="log-container" id="logContainer">
+                <div class="log-loading">로딩 중...</div>
             </div>
         </div>
     </div>
